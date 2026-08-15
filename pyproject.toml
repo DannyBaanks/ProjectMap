@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "projectmap"
+version = "0.1.0"
+description = "Modular project architecture mapping engine -- model, not architecture."
+requires-python = ">=3.10"
+
+[project.scripts]
+projectmap = "projectmap.cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra -q"
+
+[tool.ruff]
+line-length = 100

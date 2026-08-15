@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Sistema
+.DS_Store
+Thumbs.db
+*.log
+
+# Salidas regenerables de export (no commits de basura)
+projectmap-output/
