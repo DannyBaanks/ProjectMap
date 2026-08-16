@@ -58,68 +58,153 @@ def load_manifest(root: str | Path) -> Manifest:
 
 
 def _parse_simple_yaml(text: str) -> dict:
-    """Parser fallback para YAML plano sin dependencias. Soporta:
-    project:
-      name: foo
-    file_languages:
-      "foo.py": python
-    components:
-      - id: core
-        role: engine
-    relations:
-      - from: a
-        to: b
-        type: depends_on
-    Limitado pero suficiente para el MVP. Si el usuario necesita el parser
-    completo, instalar PyYAML.
+    """Parser fallback para YAML plano sin dependencias. Soporta el subconjunto
+    documentado en docs/PRINCIPLES.md y el stub de `projectmap init`:
+
+        project:
+          name: foo
+        file_languages:
+          "foo.py": python
+        components:
+          - id: core
+            role: engine
+        relations:
+          - from: api
+            to: core
+            type: invokes
+
+    Reglas soportadas:
+    - indentación por espacios (niveles consistentes por bloque).
+    - key: value  -> string (comillas opcionales). key: solo -> dict|list.
+    - "- key: value"  -> item de lista (dict). Las siguientes líneas indentadas
+      con mayor indent que el "-" pertenecen al mismo item.
+    - comentarios '#' y líneas vacías se ignoran.
+    No soporta: anchors, multiline strings, flow style, tipos nativos (todo
+    es string). Si necesitas eso, instala PyYAML.
     """
-    # Implementación mínima: por líneas, indentación = nivel.
+    lines = _yaml_lines(text)
     root: dict = {}
-    stack: list[tuple[int, dict | list]] = [(-1, root)]
+    _parse_block(lines, 0, root)
+    return root
+
+
+def _yaml_lines(text: str) -> list[tuple[int, str]]:
+    """Devuelve [(indent, stripped), ...] sin comentarios ni vacías."""
+    out = []
     for raw in text.splitlines():
         if not raw.strip() or raw.lstrip().startswith("#"):
             continue
         indent = len(raw) - len(raw.lstrip(" "))
-        line = raw.strip()
-        # descartar llaves sueltas en fallback simplista
-        cur_indent, cur = stack[-1]
-        while indent <= cur_indent and len(stack) > 1:
-            stack.pop()
-            cur_indent, cur = stack[-1]
-        if isinstance(cur, list):
-            # list item
-            if line.startswith("- "):
+        out.append((indent, raw.strip()))
+    return out
+
+
+def _parse_block(lines: list[tuple[int, str]], start: int, into: dict | list) -> int:
+    """Parse recursivo por indentación. `into` es dict o list del nivel actual.
+    Devuelve el índice de la siguiente línea no consumida."""
+    i = start
+    base_indent = lines[start][0] if start < len(lines) else 0
+    while i < len(lines):
+        indent, line = lines[i]
+        if indent < base_indent:
+            # sube un nivel: fin de este bloque
+            return i
+        if indent > base_indent:
+            # no debería pasar aquí; el hijo ya consumió su propio bloque
+            i += 1
+            continue
+        if line.startswith("- "):
+            # parent debe ser list; si into es dict, no podemos (no documentado)
+            if isinstance(into, list):
                 item = {}
+                # primera key:value del item
                 rest = line[2:].strip()
                 if rest:
-                    _put(item, rest)
-                cur.append(item)
-                stack.append((indent, item))
-            else:
-                # key dentro de un item de lista
-                _put(cur, line)
-        else:
-            if line.startswith("- "):
-                # la pass anterior era dict, ahora lista: reemplazar
-                _key, _val, _rest = _split_key(line[2:].strip())
+                    _put_kv(item, rest)
+                into.append(item)
+                i += 1
+                # consumir sub-bloque indentado del item
+                if i < len(lines) and lines[i][0] > indent:
+                    if isinstance(item, dict):
+                        i = _parse_block(lines, i, item)
+                    else:
+                        i = _parse_block(lines, i, item)  # listas within list (no soportado plenamente)
                 continue
-            _put(cur, line)
-    return root
+            # dict con "-" -> patrón "key:" seguido de lista en nivel hijo. Lo
+            # manejamos en la rama key:value (dict) más abajo; si llegamos aquí
+            # es formato inválido, ignoramos.
+            i += 1
+            continue
+        # key: value  o  key: (dict|list hijo)
+        if isinstance(into, dict):
+            key, val = _kv(line)
+            if val == "":
+                # hijo: dict o lista en el siguiente nivel indentado
+                if i + 1 < len(lines) and lines[i + 1][0] > indent:
+                    child_indent = lines[i + 1][0]
+                    if lines[i + 1][1].startswith("- "):
+                        child: list = []
+                        into[key] = child
+                        i = _parse_list(lines, i + 1, child, child_indent)
+                    else:
+                        child_d: dict = {}
+                        into[key] = child_d
+                        i = _parse_block(lines, i + 1, child_d)
+                    continue
+                into[key] = {}
+                i += 1
+                continue
+            into[key] = _unquote(val)
+            i += 1
+            continue
+        # list item con clave suelta (no documentado): ignorar
+        i += 1
+    return i
 
 
-def _split_key(s: str) -> tuple[str, str]:
-    if ":" in s:
-        k, v = s.split(":", 1)
-        return k.strip().strip('"'), v.strip()
-    return s, ""
+def _parse_list(lines, start: int, into: list, indent: int) -> int:
+    """Consume items "- ..." al mismo indent."""
+    i = start
+    while i < len(lines):
+        line_indent, line = lines[i]
+        if line_indent < indent:
+            return i
+        if line_indent > indent:
+            # sub-bloque del último item ya consumido por _parse_block; skip
+            i += 1
+            continue
+        if line.startswith("- "):
+            item = {}
+            rest = line[2:].strip()
+            if rest:
+                _put_kv(item, rest)
+            into.append(item)
+            i += 1
+            if i < len(lines) and lines[i][0] > indent:
+                i = _parse_block(lines, i, item)
+            continue
+        return i
+    return i
 
 
-def _put(d: dict, line: str) -> None:
+def _kv(line: str) -> tuple[str, str]:
     if ":" in line:
         k, v = line.split(":", 1)
-        k = k.strip().strip('"')
-        v = v.strip()
-        if v == "":
-            d[k] = {}
-        else:
-            d[k] = v.strip('"')
+        return _unquote(k.strip()), v.strip()
+    return line, ""
+
+
+def _unquote(s: str) -> str:
+    s = s.strip()
+    if len(s) >= 2 and s[0] in ('"', "'") and s[-1] == s[0]:
+        return s[1:-1]
+    return s
+
+
+def _put_kv(d: dict, rest: str) -> None:
+    """key: value para un item de lista."""
+    if ":" in rest:
+        k, v = rest.split(":", 1)
+        d[_unquote(k.strip())] = _unquote(v.strip())
+    else:
+        d[_unquote(rest)] = ""

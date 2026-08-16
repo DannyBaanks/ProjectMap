@@ -19,6 +19,15 @@ class FileEntry:
     component_id: str | None
     evidence: tuple[Evidence, ...] = ()
 
+    def to_dict(self) -> dict:
+        return {
+            "path": self.path,
+            "language": self.language,
+            "role": self.role,
+            "component_id": self.component_id,
+            "evidence": [e.to_dict() for e in self.evidence],
+        }
+
 
 @dataclass
 class Component:
@@ -90,6 +99,7 @@ class ProjectModel:
             "root": self.root,
             "metadata": self.metadata,
             "file_count": len(self.files),
+            "files": [f.to_dict() for f in self.files],
             "languages": {k: v.to_dict() for k, v in self.languages.items()},
             "components": {k: v.to_dict() for k, v in self.components.items()},
             "relations": [

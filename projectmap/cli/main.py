@@ -74,17 +74,11 @@ def _cmd_export(args: argparse.Namespace) -> int:
         (out_dir / "ARCHITECTURE_REPORT.md").write_text(
             to_markdown(model, branding=args.branding), encoding="utf-8")
     if args.target == "github":
-        _emit_github_artifacts(out_dir, model)
+        from projectmap.adapters.github import emit_github_artifacts
+        gh_dir = out_dir / "github"
+        emit_github_artifacts(gh_dir, model, branding=args.branding)
     print(f"exported -> {out_dir}")
     return 0
-
-
-def _emit_github_artifacts(out_dir: Path, model) -> None:
-    """Artefactos GitHub neutros: report.md opcional. Sin branding si no se pide."""
-    (out_dir / "github").mkdir(exist_ok=True)
-    # Neutral: sólo el reporte de arquitectura. El usuario decide qué commitear.
-    (out_dir / "github" / "ARCHITECTURE.md").write_text(
-        to_markdown(model, branding=False), encoding="utf-8")
 
 
 def _cmd_validate(args: argparse.Namespace) -> int:

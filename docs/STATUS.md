@@ -1,43 +1,48 @@
 # ProjectMap — Estado
 
-> Evidence before narrative. Generado 2026-08-15.
+> Evidence before narrative. Generado 2026-08-15 (M1.1 + M2).
 
 ## Architecture
 - `projectmap/core/` — ProjectModel, Evidence, Manifest. **NO importa GitHub ni MEOW** (verificado por `tests/test_core_neutral.py`).
 - `projectmap/scanners/` — `fs_scan` (read-only) + `analyze` (orquestador).
-- `projectmap/detectors/` — language (extensión + manifest), role (path/basename heuristics), component (directorio).
+- `projectmap/detectors/` — language (extensión + manifest), role (path/basename heuristics), component (dir).
+- `projectmap/graph/` — **import extractor** (Python via AST; JS/Go/Rust/Ruby/Java via regex INFERRED) + **relation builder** (imports → components, INFERRED/VERIFIED).
 - `projectmap/exporters/` — JSON + Markdown. Neutral por defecto; `--branding` opt-in.
-- `projectmap/cli/` — scan/inspect/init/export/validate. `scan` y `inspect` son read-only (verificado por test).
+- `projectmap/adapters/github.py` — **GitHub adapter**: ARCHITECTURE.md + .gitattributes (Linguist hints) + language-bar.json. Local, sin push, neutral.
+- `projectmap/cli/` — scan/init/inspect/export/validate. `scan` y `inspect` son read-only.
 
-## Detection (VERIFIED en fixtures + MEOW real)
-- **Languages**: por extensión (70+ extensiones) + manifest DECLARED. VERIFIED.
-- **Roles**: test / tooling / documentation / configuration / cli / adapter / orchestration por heurísticas de path. INFERRED (excepto manifest).
+## Detection
+- **Languages**: por extensión (70+ ext) + manifest DECLARED. VERIFIED.
+- **Roles**: test/tooling/docs/cli/adapter/orchestration por path. INFERRED (excepto manifest).
 - **Components**: por directorio top-level. INFERRED.
-- **Relations**: sólo DECLARED via manifest (graph automático es futuro).
+- **Relations**: DECLARED via manifest + **INFERRED por imports** (grafo automático). Un `import` no prueba arquitectura; es INFERRED salvo AST confirmado (VERIFIED en Python).
 
 ## Evidence
-| Fixtura       | Lenguajes detectados                 | Estado    |
-|---------------|--------------------------------------|-----------|
-| simple        | 1 (python)                           | VERIFIED  |
-| multilang     | 5 (python, rust, cpp, go, markdown)  | VERIFIED  |
-| MEOW-ENGINE   | 28 lenguajes de implementación + json/yaml/toml/markdown/text | VERIFIED |
-| Reproducibilidad | mismo input -> mismo JSON         | VERIFIED  |
-| Neutralidad core   | sin imports de GitHub/MEOW/red  | VERIFIED  |
-| Read-only scan | no crea/borra archivos en el repo  | VERIFIED  |
+| Fixtura       | Lenguajes | Relations inferidas        | Estado    |
+|---------------|-----------|----------------------------|-----------|
+| simple        | 1         | 0                          | VERIFIED  |
+| multilang     | 5         | 0 (fixture minimal)       | VERIFIED  |
+| relrepo (test) | 1        | 1 (pkg_app -> pkg_core)    | VERIFIED  |
+| MEOW-ENGINE   | 28 impl   | múltiples (harness/languages/tests) | VERIFIED |
+
+## M1.1 (bug fixes auditoría)
+- **FileEntry.to_dict()** + `ProjectModel.to_dict()` ahora incluyen `files` con evidencia por archivo. **VERIFIED**.
+- **Fallback YAML reparado**: soporta listas de dicts (components/relations) sin PyYAML. **VERIFIED** por tests con y sin PyYAML.
+
+## M2 (grafo + GitHub adapter)
+- Grafo de imports: Python (AST VERIFIED), JS/TS/Go/Rust/Ruby/Java (regex INFERRED). **VERIFIED**.
+- GitHub adapter: `.gitattributes` (Linguist hints), `ARCHITECTURE.md`, `language-bar.json`. Neutral. **VERIFIED**.
+- `projectmap export --target github` genera todo local; no hace push.
 
 ## Tests
 ```
-python -m pytest -q   # 15 passed, ruff clean
+python -m pytest -q   # 33 passed
+ruff check .          # All checks passed
 ```
-Comandos ejecutados:
-- `projectmap inspect fixtures/simple` — OK
-- `projectmap inspect fixtures/multilang` — OK (5 lenguajes, roles test/tooling)
-- `projectmap inspect C:\Development\ISyCo Git\MEOW-ENGINE` — OK (28 lenguajes, 8 componentes, sin tocar el core)
-- `projectmap validate fixtures/multilang` — reproducible
 
 ## Unknown / TODO
-- Graph automático de relations por imports (milestone futuro).
-- GitHub adapter completo (.gitattributes, badges) — sólo `ARCHITECTURE.md` neutral ahora.
-- Role detection más fina (engine vs core vs library) — hoy es INFERRED débil.
-- 5 archivos "unknown" en MEOW (sin extensión reconocida) — UNKNOWN, no se inventó.
-- Detección de capabilities (declaradas vs inferidas) — futuro.
+- Component detection sigue siendo ingenuo (dir = component). Mejora futura: usar manifests reales del proyecto (Cargo.toml, package.json) — hoy UNKNOWN.
+- Role detection más fina (engine vs core) — INFERRED débil.
+- content-based language detection (sin extensión) — futuro.
+- GitHub adapter completo (badges shields.io, Actions workflow) — hoy genera artefactos sueltos.
+- 5 archivos "unknown" en MEOW (sin extensión) — no inventados.

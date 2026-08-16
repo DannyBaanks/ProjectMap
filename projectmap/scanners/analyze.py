@@ -74,7 +74,7 @@ def analyze(root: str | Path) -> ProjectModel:
                 claim=f"inferred role from file {sp.path}: {role}",
                 source="heuristic", confidence=Confidence.INFERRED))
 
-    # relaciones declaradas en el manifest (el graph automático es futuro)
+    # relaciones declaradas en el manifest (prioridad DECLARED)
     for r in manifest.relations():
         src = r.get("from") or r.get("source")
         dst = r.get("to") or r.get("target")
@@ -85,5 +85,9 @@ def analyze(root: str | Path) -> ProjectModel:
                 evidence=(Evidence(claim=f"declared relation {src} -> {dst}", source="manifest",
                                    confidence=Confidence.DECLARED),),
             ))
+
+    # relaciones INFERRED por imports (grafo automático). No duplica DECLARED.
+    from projectmap.graph.relations import build_relations
+    build_relations(model)
 
     return model
