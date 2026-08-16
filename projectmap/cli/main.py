@@ -92,6 +92,23 @@ def _cmd_validate(args: argparse.Namespace) -> int:
     return 2
 
 
+def _cmd_apply(args: argparse.Namespace) -> int:
+    """Aplica artefactos en la raíz del repo. Escribe (salvo --dry-run).
+    Nunca commitea ni hace push."""
+    model = analyze(args.path)
+    if args.target == "github":
+        from projectmap.adapters.github import apply_github_artifacts
+        plan = apply_github_artifacts(args.path, model, dry_run=args.dry_run)
+        for action, rel, note in plan:
+            print(f"{action:12} {rel}  ({note})")
+        if args.dry_run:
+            print("dry-run: nada fue escrito")
+        else:
+            print("escrito en la raiz del repo. GitHub solo aplica .gitattributes "
+                  "tras commit; ProjectMap no commitea ni hace push.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="projectmap",
                                 description="Model your project's architecture (read-only).")
@@ -117,6 +134,12 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--target", choices=["github"], default=None)
     sp.add_argument("--branding", action="store_true", help="show ProjectMap attribution (default off)")
     sp.set_defaults(func=_cmd_export)
+
+    sp = sub.add_parser("apply", help="apply local artefacts into the repo root (writes!)")
+    sp.add_argument("path")
+    sp.add_argument("--target", choices=["github"], default="github")
+    sp.add_argument("--dry-run", action="store_true", help="print plan, write nothing")
+    sp.set_defaults(func=_cmd_apply)
 
     sp = sub.add_parser("validate", help="verify reproducibility")
     sp.add_argument("path")

@@ -14,8 +14,9 @@ observe; here is the evidence; these parts are inferred; these others were
 declared by the author."
 
 ## Status
-Early prototype. Local scans only. Read-only by design. No GitHub, no cloud,
-no network, no LLM dependency. See `docs/` and `evidence/`.
+Early prototype. Local scans only. Read-only by design (the only command that
+writes into a repo is `apply`, and only when you ask for it). No cloud, no
+network, no LLM dependency. See `docs/` and `evidence/`.
 
 ## Stack
 Python 3.10+ (stdlib only), pytest for tests.
@@ -33,12 +34,32 @@ projectmap scan ./tests/fixtures/multilang
 projectmap inspect .
 projectmap init .
 projectmap export --format markdown
+projectmap export --target github      # read-only: artefacts en ./projectmap-output/github
+projectmap apply --target github --dry-run   # imprime el plan, no escribe nada
+projectmap apply --target github       # escribe .gitattributes + reportes en la raiz
 projectmap validate .
 ```
+
+### GitHub Linguist (M3)
+`export --target github` and `apply --target github` generate artifacts GitHub
+actually consumes — verified against `github-linguist/linguist` (`docs/overrides.md`
+and `lib/linguist/languages.yml`):
+- `.gitattributes` with `linguist-language` / `linguist-documentation` — only
+  for files whose language/role was **DECLARED** in the manifest. Nothing is
+  invented: VERIFIED-by-extension files need no override (Linguist infers the
+  same from the same extension).
+- Languages GitHub does not know (e.g. malbolge) are reported in
+  `github-linguist-report.json` under `unsupported_by_linguist` and never
+  written as overrides.
+- `language-bar.json` is ProjectMap's **own** report; GitHub does not consume it.
+- GitHub only applies `.gitattributes` once it is committed. ProjectMap never
+  commits and never pushes.
 
 ## Fixtures
 - `fixtures/simple/` — one language (control case).
 - `fixtures/multilang/` — Python + Rust + C++ + Go (heterogeneous).
+- `fixtures/linguist/` — Python/Rust/C++/Java/COBOL + malbolge (unsupported by
+  Linguist) + unknown extension, with a manifest declaring language/role.
 - `fixtures/meow/` — link to a real, complex repo (MEOW-ENGINE) used as the
   hard test case. ProjectMap core has zero knowledge of MEOW.
 

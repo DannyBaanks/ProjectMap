@@ -1,0 +1,6 @@
+project:
+  name: linguist
+file_languages:
+  "legacy.cob": cobol
+file_roles:
+  "docs/api.md": docs

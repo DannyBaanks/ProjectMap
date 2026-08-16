@@ -11,6 +11,7 @@ if str(ROOT) not in sys.path:
 FIXTURES = ROOT / "fixtures"
 SIMPLE = FIXTURES / "simple"
 MULTILANG = FIXTURES / "multilang"
+LINGUIST = FIXTURES / "linguist"
 # MEOW-ENGINE como fixture "cabrón" (repo real que no controlamos). Apunta al
 # repo clonado al lado de ProjectMap. Si no existe, tests de MEOW se skip.
 MEOW = ROOT.parent / "MEOW-ENGINE"
